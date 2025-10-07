@@ -37,4 +37,16 @@ sim_params <- data.frame("j" = 1:J,
                          "pj" = pj,
                          "tj" = tj)
 
+# 0.3 Setup storage matrix for data
+data <- tibble(y = rep(0, J * t))
+data$agency <- sort(rep(1:J, t)) # Setup agency index
+data$period <- rep(1:t, J) # Setup time index
+
+# Join on simulation params
+data <- left_join(data, sim_params, by = join_by("agency" == "j"))
+
+# Create treatment period dummy
+data <- data %>% 
+  mutate(treated = ifelse(period - tj >= 0, 1, 0))
+
 ## 1 Simulate data ## 
