@@ -34,7 +34,7 @@ tj <- sample(1:J, size = J, replace = FALSE) + 12
 # 0.2 Simulation parameter summary
 sim_params <- data.frame("j" = 1:J,
                          "Nj" = Nj,
-                         "pj" = pj,
+                         "pj_pre" = pj,
                          "tj" = tj)
 
 # 0.3 Setup storage matrix for data
