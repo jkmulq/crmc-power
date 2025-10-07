@@ -28,6 +28,13 @@ pj <- runif(n = J,
             min = 0.2, # Minimum rate
             max = 0.5) # Maximum rate
 
-# Treatment period for each agency
-treat_j <- sample(1:J, size = J, replace = FALSE)
+# Treatment period for each agency (add 12 to account for first year)
+tj <- sample(1:J, size = J, replace = FALSE) + 12
 
+# 0.2 Simulation parameter summary
+sim_params <- data.frame("j" = 1:J,
+                         "Nj" = Nj,
+                         "pj" = pj,
+                         "tj" = tj)
+
+## 1 Simulate data ## 
