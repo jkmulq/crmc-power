@@ -57,3 +57,36 @@ agency_data <- agency_data %>%
 agency_data$Njt <- agency_data$Nj + extraDistr::rdunif(n = J * t, min = -15, max = 15)
 
 ## 1 Simulate data ## 
+data <- vector("list", length = t) 
+
+for (time in 1:t){
+  
+  # Filter for time period t
+  agency_data_t <- agency_data %>% filter(period == time)
+  
+  # For each agency, simulate based on the parameters in that time period
+  outcome_data_t <- lapply(1:J, function(j){
+    
+    # Select an agency's data
+    df <- agency_data_t %>% filter(agency == j)
+    
+    # Simulate outcomes
+    outcome_jt <- rbern(n = df$Njt, prob = df$pj_post)
+    
+    # Outcome DF
+    tibble(y = outcome_jt, 
+           id = 1:(df$Njt), 
+           agency = j, 
+           period = time, 
+           treated = df$treated)
+    
+  }) %>% 
+    do.call(rbind, .)
+  
+  # Append data to list
+  data[[time]] <- outcome_data_t
+  
+}
+
+# Combine into normal dataframe
+data <- do.call(rbind, data)
