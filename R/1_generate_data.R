@@ -9,6 +9,9 @@ rm(list = ls())
 library(tidyverse)
 library(extraDistr)
 
+# Seed
+set.seed(1235901350)
+
 ## 0 Preliminaries
 # 0.1 simulation parameters
 J <- 30 # No. agencies
@@ -18,4 +21,12 @@ t <- 4 * 12 # No. years
 Nj <- extraDistr::rdunif(n = J, 
                          min = 50, # Minimum number
                          max = 200) # Maximum number
+
+# True recidivism rate across agencies
+pj <- runif(n = J, 
+            min = 0.2, # Minimum rate
+            max = 0.5) # Maximum rate
+
+# Treatment period for each agency
+treat_j <- sample(1:J, size = J, replace = FALSE)
 
