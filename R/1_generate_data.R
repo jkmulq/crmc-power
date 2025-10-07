@@ -49,4 +49,8 @@ data <- left_join(data, sim_params, by = join_by("agency" == "j"))
 data <- data %>% 
   mutate(treated = ifelse(period - tj >= 0, 1, 0))
 
+# Create post treatment recidivism probability
+data <- data %>% 
+  mutate(pj_post = ifelse(treated == 1, pj - rho, pj))
+
 ## 1 Simulate data ## 
