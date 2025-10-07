@@ -113,10 +113,10 @@ data <- data %>%
   mutate(e_period = period - tj)
 
 ## Run regression
-reg <- fixest::feols(y ~ i(e_period, ref = -1) | mvsw(agency, period), 
+reg <- fixest::feols(y ~ i(treated.x) | mvsw(agency, period), 
               data = data, lean = TRUE, mem.clean = TRUE)
 
 ggiplot(reg) + 
   geom_hline(yintercept = -rho) + 
-  labs(x = "Reference period", 
-       title = "TWFE Staggered Rollout")
+  labs(x = "Treated (0/1)", 
+       title = "Treatment effect")
