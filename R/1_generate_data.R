@@ -53,4 +53,7 @@ data <- data %>%
 data <- data %>% 
   mutate(pj_post = ifelse(treated == 1, pj - rho, pj))
 
+# Create time-varying agency size
+data$Njt <- data$Nj + extraDistr::rdunif(n = J * t, min = -15, max = 15)
+
 ## 1 Simulate data ## 
