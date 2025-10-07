@@ -16,7 +16,8 @@ set.seed(1235901350)
 # 0.1 simulation parameters
 J <- 30 # No. agencies
 t <- 4 * 12 # No. years
-
+rho <- 0.1 # Treatment effect size
+  
 # Average number of probationers over time for each agency
 Nj <- extraDistr::rdunif(n = J, 
                          min = 50, # Minimum number
