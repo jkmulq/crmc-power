@@ -8,6 +8,7 @@ rm(list = ls())
 # Packages
 library(tidyverse)
 library(extraDistr)
+library(ggfixest)
 
 # Seed
 set.seed(1235901350)
@@ -38,7 +39,7 @@ sim_params <- data.frame("j" = 1:J,
                          "tj" = tj)
 
 # 0.3 Setup storage matrix for data
-agency_data <- tibble(y = rep(0, J * t))
+agency_data <- tibble(agency = rep(0, J * t))
 agency_data$agency <- sort(rep(1:J, t)) # Setup agency index
 agency_data$period <- rep(1:t, J) # Setup time index
 
@@ -90,3 +91,32 @@ for (time in 1:t){
 
 # Combine into normal dataframe
 data <- do.call(rbind, data)
+
+# Join on simulation parameters
+data <- left_join(data, agency_data, by = c("agency", "period")) 
+
+# Check that treatment years align
+check <- all(data$treated.x == data$treated.y)
+print(ifelse(check, "Treatment years align", stop()))
+
+# Check that group years align
+data <- data %>% 
+  group_by(agency, period) %>% 
+  mutate(Njt_imputed = n()) %>% 
+  ungroup()
+
+check <- all(data$Njt == data$Njt_imputed)
+print(ifelse(check, "Number of probationers per period align", stop()))
+
+# Create event year variable
+data <- data %>% 
+  mutate(e_period = period - tj)
+
+## Run regression
+reg <- fixest::feols(y ~ i(e_period, ref = -1) | mvsw(agency, period), 
+              data = data, lean = TRUE, mem.clean = TRUE)
+
+ggiplot(reg) + 
+  geom_hline(yintercept = -rho) + 
+  labs(x = "Reference period", 
+       title = "TWFE Staggered Rollout")
