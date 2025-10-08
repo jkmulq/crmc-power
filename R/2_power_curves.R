@@ -21,8 +21,8 @@ set.seed(1235901350)
 # 0.1 simulation parameters
 J <- 30 # No. agencies
 t <- 4 * 12 # No. years
-rho_vec <- seq(-0.01, 0.15, 0.01) # Treatment effect sizes
-M <- 50 # Simulation reps
+rho_vec <- seq(-0.03, 0.03, 0.0075) # Treatment effect sizes
+M <- 150 # Simulation reps
 
 # Average number of probationers over time for each agency
 Nj <- extraDistr::rdunif(n = J, 
@@ -31,8 +31,8 @@ Nj <- extraDistr::rdunif(n = J,
 
 # True recidivism rate across agencies
 pj <- runif(n = J, 
-            min = 0.2, # Minimum rate
-            max = 0.5) # Maximum rate
+            min = 0.2, # Minimum rate. Must be >= min treatment effect
+            max = 0.5) # Maximum rate. 1 - this > max treatment
 
 # Treatment period for each agency (add 12 to account for first year)
 tj <- sample(1:J, size = J, replace = FALSE) + 12
@@ -59,13 +59,66 @@ agency_data <- agency_data %>%
 agency_data$Njt <- agency_data$Nj + extraDistr::rdunif(n = J * t, min = -15, max = 15)
 
 
-for (elem in rho_vec){
+
+# Detect available cores
+n_cores <- parallel::detectCores() - 1
+cat("Using", n_cores, "cores\n")
+
+# Simulation result list 
+results <- vector("list", length = length(rho_vec))
+
+# Loop across rho values (serial outer loop, parallel inner loop)
+for (e in seq_along(rho_vec)) {
   
-  # Select rho element
-  rho <- elem
+  rho <- rho_vec[e]
   
-  # Create post-treatment probabilities conditional on true rho
-  agency_data <- agency_data %>% 
-    mutate(pj_post = ifelse(treated == 1, pj - rho, pj))
+  cat("Running rho =", rho, "(", e, "/", length(rho_vec), ")\n")
+  
+  # Run simulations and store results
+  results[[e]] <- run_sim_for_rho(rho, M, agency_data, n_cores)
   
 }
+
+
+## Generate rejection rates for H0: rho = delta0
+delta0 <- 0
+conf_lev <- 0.05
+z <- qnorm(1 - conf_lev / 2)
+power <- sapply(results, function(mat){
+  
+  mean(abs((mat[,1] - delta0) / mat[,2]) > z)
+  
+})
+
+# Create datframe
+power_res <- data.frame(delta = rho_vec, 
+                        power = power)
+
+# Graph
+ggplot(data = power_res, aes(x = delta, y = power)) +
+  geom_point() + 
+  geom_smooth(se = FALSE, span = 0.5, colour = "grey80") +
+  theme_minimal() +
+  labs(title = "Power Curves", 
+       x = expression(delta), 
+       y = "Power",
+       caption = str_wrap("Points represent frequency with which a two-tailed 5% t-test rejects the false H0: delta = 0. Smoothed line generated using LOESS."), 
+       90)  +
+  theme(
+    plot.title = element_text(hjust = 0.5), 
+    plot.caption = element_text(hjust = 0)
+  ) +
+  ylim(-0.05, 1.05) +
+  geom_hline(yintercept = 0) +
+  geom_hline(yintercept = conf_lev, 
+             linetype = "dashed", 
+             colour = "firebrick") +
+  annotate(
+    "text",
+    x = max(power_res$delta),          # right side of plot
+    y = conf_lev + 0.05,               # slightly above line
+    label = bquote(alpha == .(conf_lev)),
+    colour = "firebrick",
+    hjust = 1,                         # right-justified
+    size = 3.5
+  )
