@@ -138,7 +138,11 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
     twfe_cl <- fixest::vcov_cluster(twfe_reg, cluster = ~agency)
     twfe_rb <- stats::vcov(twfe_reg, "hetero")
     
-    return(as.numeric(twfe_reg$coeftable[, c(1, 2)]))
+    # Return coefficients and standard errors
+    return(c(twfe_reg$coefficients[1], 
+             twfe_cl,
+             twfe_rb))
+    
   }, mc.cores = n_cores)
   
   store <- do.call(rbind, store)
