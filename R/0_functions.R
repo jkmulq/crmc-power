@@ -125,11 +125,18 @@ generate_data_fast <- function(agency_data, delta) {
 # Function to run simulations for one rho
 run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
   store <- mclapply(1:M, function(i) {
+    
+    # Generate data
     data <- generate_data_fast(agency_data = agency_data, delta = rho)
     
+    # Estimate TWFE 
     twfe_reg <- fixest::feols(y ~ i(treated.x) | agency + period,
-                              data = data, cluster = ~agency,
-                              lean = TRUE, mem.clean = TRUE)
+                          data = data, lean = FALSE, mem.clean = TRUE)
+    
+    # Estimate clustered and HC robust standard errors
+    # Note: vcov = "hetero" calculates HC1 errors, equivalent to STATA's vce(robust) option.
+    twfe_cl <- fixest::vcov_cluster(twfe_reg, cluster = ~agency)
+    twfe_rb <- stats::vcov(twfe_reg, "hetero")
     
     return(as.numeric(twfe_reg$coeftable[, c(1, 2)]))
   }, mc.cores = n_cores)
