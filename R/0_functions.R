@@ -77,3 +77,65 @@ generate_data <- function(agency_data, delta){
   return(data)
   
 }
+
+
+
+generate_data_fast <- function(agency_data, delta) {
+  
+  # infer J and t
+  J <- max(agency_data$agency)
+  t <- max(agency_data$period)
+  
+  # update post-treatment probabilities once
+  agency_data$pj_post <- ifelse(agency_data$treated == 1, 
+                                agency_data$pj_pre + delta, 
+                                agency_data$pj_pre)
+  
+  # preallocate a list for results
+  data_list <- vector("list", length = nrow(agency_data))
+  
+  # simulate all outcomes at once using vectorized rbern
+  # (one row = one agency-period cell)
+  for (i in seq_len(nrow(agency_data))) {
+    df <- agency_data[i, ]
+    y <- rbern(df$Njt, df$pj_post)
+    data_list[[i]] <- data.frame(
+      y = y,
+      id = seq_len(df$Njt),
+      agency = df$agency,
+      period = df$period,
+      treated = df$treated
+    )
+  }
+  
+  # bind results
+  data <- data.table::rbindlist(data_list, use.names = TRUE)
+  
+  # join parameters using a key merge (faster than left join)
+  agency_data_dt <- data.table::as.data.table(agency_data)
+  data <- merge(data, agency_data_dt, by = c("agency", "period"), all.x = TRUE)
+  
+  # checks (can be disabled for production)
+  stopifnot(all(data$treated.x == data$treated.y))
+  stopifnot(all(data$Njt == ave(data$agency, data$agency, data$period, FUN = length)))
+  
+  # Return data
+  data[]
+}
+
+
+# Function to run simulations for one rho
+run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
+  store <- mclapply(1:M, function(i) {
+    data <- generate_data_fast(agency_data = agency_data, delta = rho)
+    
+    twfe_reg <- fixest::feols(y ~ i(treated.x) | agency + period,
+                              data = data, cluster = ~agency,
+                              lean = TRUE, mem.clean = TRUE)
+    
+    return(as.numeric(twfe_reg$coeftable[, c(1, 2)]))
+  }, mc.cores = n_cores)
+  
+  store <- do.call(rbind, store)
+  return(store)
+}
