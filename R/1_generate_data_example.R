@@ -1,4 +1,4 @@
-### DGP
+### DGP example
 ### Jack Mulqueeney
 ### Oct 7, 2025
 
