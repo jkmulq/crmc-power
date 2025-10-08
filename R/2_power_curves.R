@@ -21,7 +21,7 @@ set.seed(1235901350)
 # 0.1 simulation parameters
 J <- 30 # No. agencies
 t <- 4 * 12 # No. years
-rho_vec <- seq(-0.03, 0, 0.003) # Treatment effect sizes
+rho_vec <- seq(-0.02, 0, 0.0025) # Treatment effect sizes
 M <- 200 # Simulation reps
 
 # Average number of probationers over time for each agency
@@ -78,24 +78,32 @@ for (e in seq_along(rho_vec)) {
 }
 
 
+## Reshape data to nice format
+results_df <- do.call(rbind, results) %>% 
+  as_tibble() %>% 
+  setNames(c("delta", "coef", "TWFE Clustered", "TWFE Robust")) %>% 
+  pivot_longer(., cols = -c("delta", "coef"), values_to = "vcv")
+
 ## Generate rejection rates for H0: rho = delta0
 delta0 <- 0
 conf_lev <- 0.05
 z <- qnorm(1 - conf_lev / 2)
-power <- sapply(results, function(mat){
-  
-  mean(abs((mat[,1] - delta0) / mat[,2]) > z)
-  
-})
 
-# Create datframe
-power_res <- data.frame(delta = rho_vec, 
-                        power = power)
+# Rejection rate calculations
+reject_rates <- results_df %>% 
+  mutate(t = abs( (coef - delta0) / sqrt(vcv) ),
+         reject = (t > z))
+
+# Power
+power_res <- reject_rates %>% 
+  group_by(delta, name) %>% 
+  summarise(power = mean(reject))
 
 # Graph
-ggplot(data = power_res, aes(x = delta, y = power)) +
+ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
   geom_point() + 
-  geom_smooth(se = FALSE, span = 0.5, colour = "grey80") +
+  geom_smooth(aes(colour = name), 
+              se = FALSE, span = 0.75) +
   theme_minimal() +
   labs(title = "Power Curve for TWFE", 
        x = expression(delta), 
@@ -104,7 +112,10 @@ ggplot(data = power_res, aes(x = delta, y = power)) +
        90)  +
   theme(
     plot.title = element_text(hjust = 0.5), 
-    plot.caption = element_text(hjust = 0)
+    plot.caption = element_text(hjust = 0),
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.direction = "horizontal"
   ) +
   ylim(-0.05, 1.05) +
   geom_hline(yintercept = 0) +
@@ -116,7 +127,7 @@ ggplot(data = power_res, aes(x = delta, y = power)) +
              colour = "steelblue") +
   annotate(
     "text",
-    x = max(power_res$delta),       
+    x = mean(power_res$delta),       
     y = conf_lev + 0.05,            
     label = bquote(alpha == .(conf_lev)),
     colour = "firebrick",
