@@ -1,4 +1,8 @@
-## Functions
+## Functions script
+devtools::install_github("jonathandroth/staggered")
+library(staggered) # For Roth & Sant'Anna (2023) Estimator
+library(fixest)
+library(data.table)
 
 generate_data <- function(agency_data, delta){
   # Function that generates the probation-agency-time data with treatment effect
@@ -130,8 +134,13 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
     data <- generate_data_fast(agency_data = agency_data, delta = rho)
     
     # Estimate TWFE 
+    # Base
     twfe_reg <- fixest::feols(y ~ i(treated.x) | agency + period,
                           data = data, lean = FALSE, mem.clean = TRUE)
+    
+    # Sun-Abraham style
+    twfe_sunab <- fixest::feols(y ~ sunab(tj, period) | agency + period, 
+                                data = data, lean = FALSE, mem.clean = TRUE)
     
     # Estimate clustered and HC robust standard errors
     # Note: vcov = "hetero" calculates HC1 errors, equivalent to STATA's vce(robust) option.
