@@ -1,15 +1,21 @@
 ## Functions
 
-generate_data <- function(agency_data){
+generate_data <- function(agency_data, delta){
   # Function that generates the probation-agency-time data with treatment effect
-  # Only input is a special agency_data dataframe, which contains all information
+  # Inputs are a special agency_data dataframe, which contains all information
   # about agency parameters over time.
-  
-  # Create vector for storage
-  data <- vector("list", length = t) 
+  # Other is delta = treatment effect
   
   # Infer J (no. of agencies)
   J <- max(agency_data$agency)
+  
+  # Create post-treatment probabilities conditional on true treatment effect
+  agency_data <- agency_data %>% 
+    mutate(pj_post = ifelse(treated == 1, pj - delta, pj))
+  
+  # Create vector for storage
+  data <- vector("list", length = t) 
+
   
   for (time in 1:t){
     
