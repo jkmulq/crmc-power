@@ -11,7 +11,7 @@ generate_data <- function(agency_data, delta){
   
   # Create post-treatment probabilities conditional on true treatment effect
   agency_data <- agency_data %>% 
-    mutate(pj_post = ifelse(treated == 1, pj - delta, pj))
+    mutate(pj_post = ifelse(treated == 1, pj + delta, pj))
   
   # Create vector for storage
   data <- vector("list", length = t) 
