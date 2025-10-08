@@ -61,4 +61,7 @@ generate_data <- function(){
   data <- data %>% 
     mutate(e_period = period - tj)
   
+  # Return
+  return(data)
+  
 }
