@@ -1,9 +1,15 @@
 ## Functions
 
-generate_data <- function(){
+generate_data <- function(agency_data){
   # Function that generates the probation-agency-time data with treatment effect
+  # Only input is a special agency_data dataframe, which contains all information
+  # about agency parameters over time.
   
+  # Create vector for storage
   data <- vector("list", length = t) 
+  
+  # Infer J (no. of agencies)
+  J <- max(agency_data$agency)
   
   for (time in 1:t){
     
