@@ -146,5 +146,7 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
   }, mc.cores = n_cores)
   
   store <- do.call(rbind, store)
+  store <- cbind(rep(rho, M), store) # Append the treatment effect
+  
   return(store)
 }
