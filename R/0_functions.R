@@ -127,7 +127,7 @@ generate_data_fast <- function(agency_data, delta) {
 
 
 # Function to run simulations for one rho
-run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
+run_sim_for_rho <- function(rho, M, agency_data, n_cores, sunab = F) {
   store <- mclapply(1:M, function(i) {
     
     # Generate data
@@ -139,8 +139,11 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
                           data = data, lean = FALSE, mem.clean = TRUE)
     
     # Sun-Abraham style
-    twfe_sunab <- fixest::feols(y ~ sunab(tj, period) | agency + period, 
-                                data = data, lean = FALSE, mem.clean = TRUE)
+    if (sunab){
+      twfe_sunab <- fixest::feols(y ~ sunab(tj, period) | agency + period, 
+                                  data = data, lean = FALSE, mem.clean = TRUE)
+    }
+
     
     # Estimate clustered and HC robust standard errors
     # Note: vcov = "hetero" calculates HC1 errors, equivalent to STATA's vce(robust) option.
