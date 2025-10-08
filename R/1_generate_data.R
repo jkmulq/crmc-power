@@ -18,7 +18,8 @@ set.seed(1235901350)
 J <- 30 # No. agencies
 t <- 4 * 12 # No. years
 rho <- 0.1 # Treatment effect size
-  
+M <- 1 # Simulation reps
+
 # Average number of probationers over time for each agency
 Nj <- extraDistr::rdunif(n = J, 
                          min = 50, # Minimum number
@@ -112,11 +113,10 @@ print(ifelse(check, "Number of probationers per period align", stop()))
 data <- data %>% 
   mutate(e_period = period - tj)
 
-## Run regression
-reg <- fixest::feols(y ~ i(treated.x) | mvsw(agency, period), 
-              data = data, lean = TRUE, mem.clean = TRUE)
+## Run regressions
+reg <- fixest::feols(y ~ i(treated.x) | agency + period, 
+                     data = data, cluster = ~agency,
+                     lean = TRUE, mem.clean = TRUE)
 
-ggiplot(reg) + 
-  geom_hline(yintercept = -rho) + 
-  labs(x = "Treated (0/1)", 
-       title = "Treatment effect")
+
+
