@@ -78,8 +78,6 @@ generate_data <- function(agency_data, delta){
   
 }
 
-
-
 generate_data_fast <- function(agency_data, delta) {
   
   # infer J and t
