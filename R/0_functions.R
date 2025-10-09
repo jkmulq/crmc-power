@@ -127,37 +127,60 @@ generate_data_fast <- function(agency_data, delta) {
 
 
 # Function to run simulations for one rho
-run_sim_for_rho <- function(rho, M, agency_data, n_cores, sunab = F) {
+run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
   store <- mclapply(1:M, function(i) {
     
     # Generate data
     data <- generate_data_fast(agency_data = agency_data, delta = rho)
     
-    # Estimate TWFE 
-    # Base
+    # Estimate treatment effects
+    # Base TWFE
     twfe_reg <- fixest::feols(y ~ i(treated.x) | agency + period,
                           data = data, lean = FALSE, mem.clean = TRUE)
     
-    # Sun-Abraham style
-    if (sunab){
-      twfe_sunab <- fixest::feols(y ~ sunab(tj, period) | agency + period, 
-                                  data = data, lean = FALSE, mem.clean = TRUE)
-    }
-
     
     # Estimate clustered and HC robust standard errors
     # Note: vcov = "hetero" calculates HC1 errors, equivalent to STATA's vce(robust) option.
-    twfe_cl <- fixest::vcov_cluster(twfe_reg, cluster = ~agency)
-    twfe_rb <- stats::vcov(twfe_reg, "hetero")
+    twfe_cl <- sqrt(fixest::vcov_cluster(twfe_reg, cluster = ~agency))
+    twfe_rb <- sqrt(stats::vcov(twfe_reg, "hetero"))
+    
+    
+    # Other estimators
+    # Require a unique panel id. 
+    # To generate, concatenate 'id' and 'tj' (which is the treatment cohort variable)
+    data <- data %>% 
+      mutate(uid = paste(id, tj, sep = "_"))
+    
+    # Roth-Sant'Anna
+    twfe_rs <- staggered::staggered(df = data,
+                                          i = "uid", # Cross-sectional unit identifier
+                                          t = "period", # Time period column
+                                          g = "tj", # First period observation is treated,
+                                          y = "y", # Outcome variable
+                                          estimand = "simple")
+    
+    # Callaway-Sant'Anna
+    twfe_cs <- staggered::staggered_cs(df = data,
+                                      i = "uid", # Cross-sectional unit identifier
+                                      t = "period", # Time period column
+                                      g = "tj", # First period observation is treated,
+                                      y = "y", # Outcome variable
+                                      estimand = "simple")
     
     # Return coefficients and standard errors
-    return(c(twfe_reg$coefficients[1], 
-             twfe_cl,
-             twfe_rb))
+    out <- c(twfe_reg$coefficients[1], 
+             twfe_cl, 
+             twfe_rb,
+             twfe_rs[1:2],
+             twfe_cs[1:2])
+    
+    # Return
+    return(out)
     
   }, mc.cores = n_cores)
   
   store <- do.call(rbind, store)
+  colnames(store) <- NULL # Remove column names
   store <- cbind(rep(rho, M), store) # Append the treatment effect
   
   return(store)
