@@ -141,6 +141,7 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
     
     # Estimate clustered and HC robust standard errors
     # Note: vcov = "hetero" calculates HC1 errors, equivalent to STATA's vce(robust) option.
+    # vcov() and vcov_cluster() estimate variances, so sqrt() to get SE.
     twfe_cl <- sqrt(fixest::vcov_cluster(twfe_reg, cluster = ~agency))
     twfe_rb <- sqrt(stats::vcov(twfe_reg, "hetero"))
     
@@ -182,6 +183,10 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
   store <- do.call(rbind, store)
   colnames(store) <- NULL # Remove column names
   store <- cbind(rep(rho, M), store) # Append the treatment effect
+  store <- as.data.frame(store) %>% 
+    setNames(c("delta", "twfe_est", "twfe_cl_se", "twfe_hc1_se", 
+               "rs_est", "rs_se",
+               "cs_est", "cs_se"))
   
   return(store)
 }
