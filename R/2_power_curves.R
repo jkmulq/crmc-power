@@ -25,9 +25,11 @@ rho_vec <- seq(-0.025, 0, 0.002) # Treatment effect sizes
 M <- 500 # Simulation reps
 
 # Average number of probationers over time for each agency
+Njmin <- 20
+Njmax <- 500
 Nj <- extraDistr::rdunif(n = J,
-                         min = 20, # Minimum number
-                         max = 500) # Maximum number
+                         min = Njmin, # Minimum number
+                         max = Njmax) # Maximum number
 
 # True recidivism rate across agencies
 pj <- runif(n = J, 
@@ -108,7 +110,7 @@ reject_rates <- results_df %>%
 # Power
 # TWFE
 twfe_power <- reject_rates %>% 
-  filter(str_detect(name, "TWFE")) %>% 
+  filter(str_detect(name, "TWFE"), !str_detect(name, "(drops)")) %>% 
   group_by(delta, name) %>% 
   summarise(power = mean(TWFE)) %>% 
   ungroup()
@@ -139,7 +141,7 @@ power_res <- rbind(twfe_power, twfe_drops_power, rs_power, cs_power)
 
 
 # Graph
-ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
+p <- ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
   geom_point() + 
   geom_smooth(aes(colour = name), 
               se = FALSE, span = 0.75) +
@@ -188,3 +190,21 @@ ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
       byrow = TRUE
     )
   )
+
+
+## Save results and graph
+results_loc <- "/Users/jmulqueeney/Documents/Dev/crmc-power/results"
+graphs_loc <- "/Users/jmulqueeney/Documents/Dev/crmc-power/graphs"
+
+write.csv(results_df, paste0(results_loc, 
+                             "/power results (M", M, "J", J, "T", t, "Njmax", 500, ").csv"))
+
+ggsave(paste0(graphs_loc,
+               "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").png"),
+        p)
+ggsave(paste0(graphs_loc,
+              "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").svg"),
+       p)
+ggsave(paste0(graphs_loc,
+              "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").pdf"),
+       p)
