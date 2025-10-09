@@ -139,13 +139,13 @@ power_res <- rbind(twfe_power, twfe_drops_power, rs_power, cs_power)
 
 
 # Graph
-ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
+ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
   geom_point() + 
   geom_smooth(aes(colour = name), 
               se = FALSE, span = 0.75) +
   theme_minimal() +
   labs(title = "Power Curves", 
-       x = expression(delta), 
+       x = expression("|" * delta * "|"), 
        y = "Power",
        caption = str_wrap("Points represent frequency with which a two-tailed 5% t-test rejects the false H0: delta = 0. Smoothed line generated using LOESS.", 90))  +
   theme(
@@ -164,7 +164,7 @@ ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
              colour = "steelblue") +
   annotate(
     "text",
-    x = -0.015,       
+    x = 0.015,       
     y = conf_lev + 0.05,            
     label = paste0("alpha == ", conf_lev),
     parse = TRUE,
@@ -174,7 +174,7 @@ ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
   ) +
   annotate(
     "text",
-    x = max(power_res$delta),       
+    x = 0.005,       
     y = 0.8 - 0.075,                  
     label = "80% power",
     colour = "steelblue",
@@ -183,8 +183,8 @@ ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
   ) +
   guides(
     colour = guide_legend(
-      nrow = 2,
-      ncol = 3,
+      nrow = 3,
+      ncol = 2,
       byrow = TRUE
     )
   )
