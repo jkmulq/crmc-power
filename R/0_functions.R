@@ -145,6 +145,14 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
     twfe_cl <- sqrt(fixest::vcov_cluster(twfe_reg, cluster = ~agency))
     twfe_rb <- sqrt(stats::vcov(twfe_reg, "hetero"))
     
+    # TWFE, dropping 12 months after treatment
+    data <- data %>% mutate(eperiod = period - tj)
+    twfe_reg_drops <- fixest::feols(y ~ i(treated.x) | agency + period,
+                              data = data %>% filter(!(eperiod %in% 0:11)), # Drop 12 months after initial treatment 
+                              lean = FALSE, mem.clean = TRUE)
+    
+    twfe_cl_drops <- sqrt(fixest::vcov_cluster(twfe_reg_drops, cluster = ~agency))
+    twfe_rb_drops <- sqrt(stats::vcov(twfe_reg_drops, "hetero"))
     
     # Other estimators
     # Require a unique panel id. 
@@ -172,6 +180,9 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
     out <- c(twfe_reg$coefficients[1], 
              twfe_cl, 
              twfe_rb,
+             twfe_reg_drops$coefficients[1],
+             twfe_cl_drops,
+             twfe_rb_drops,
              twfe_rs[1:2],
              twfe_cs[1:2])
     
@@ -184,7 +195,9 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
   colnames(store) <- NULL # Remove column names
   store <- cbind(rep(rho, M), store) # Append the treatment effect
   store <- as.data.frame(store) %>% 
-    setNames(c("delta", "twfe_est", "twfe_cl_se", "twfe_hc1_se", 
+    setNames(c("delta", 
+               "twfe_est", "twfe_cl_se", "twfe_hc1_se", 
+               "twfe_drops_est", "twfe_drops_cl_se", "twfe_drops_hc1_se", 
                "rs_est", "rs_se",
                "cs_est", "cs_se"))
   
