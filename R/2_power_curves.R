@@ -20,14 +20,14 @@ set.seed(1235901350)
 ## 0 Preliminaries
 # 0.1 simulation parameters
 J <- 30 # No. agencies
-t <- 4 * 12 # No. years
-rho_vec <- seq(-0.02, 0, 0.0025) # Treatment effect sizes
-M <- 200 # Simulation reps
+t <- 12 * 4 # No. years
+rho_vec <- seq(-0.025, 0, 0.002) # Treatment effect sizes
+M <- 500 # Simulation reps
 
 # Average number of probationers over time for each agency
-Nj <- extraDistr::rdunif(n = J, 
-                         min = 50, # Minimum number
-                         max = 200) # Maximum number
+Nj <- extraDistr::rdunif(n = J,
+                         min = 20, # Minimum number
+                         max = 500) # Maximum number
 
 # True recidivism rate across agencies
 pj <- runif(n = J, 
@@ -80,9 +80,20 @@ for (e in seq_along(rho_vec)) {
 
 ## Reshape data to nice format
 results_df <- do.call(rbind, results) %>% 
-  as_tibble() %>% 
-  setNames(c("delta", "coef", "TWFE Clustered", "TWFE Robust")) %>% 
-  pivot_longer(., cols = -c("delta", "coef"), values_to = "vcv")
+  as.data.frame() %>% 
+  setNames(c("delta", 
+             "TWFE", "TWFE Clustered SE", "TWFE Robust SE", 
+             "TWFE (drops)", "TWFE (drops) Clustered SE", "TWFE (drops) Robust SE",
+             "Roth-Sant'Anna", "Roth-Sant'Anna SE",
+             "Callaway-Sant'Anna", "Callaway-Sant'Anna SE")) %>% 
+  pivot_longer(., cols = c("TWFE Clustered SE", 
+                            "TWFE Robust SE", 
+                            "TWFE (drops) Clustered SE",
+                            "TWFE (drops) Robust SE",
+                            "Roth-Sant'Anna SE", 
+                            "Callaway-Sant'Anna SE"), 
+               values_to = "se") %>% 
+  mutate(across(.cols = -name, .fns = as.numeric))
 
 ## Generate rejection rates for H0: rho = delta0
 delta0 <- 0
@@ -91,13 +102,41 @@ z <- qnorm(1 - conf_lev / 2)
 
 # Rejection rate calculations
 reject_rates <- results_df %>% 
-  mutate(t = abs( (coef - delta0) / sqrt(vcv) ),
-         reject = (t > z))
+  mutate(across(.cols = c("TWFE", "TWFE (drops)", "Roth-Sant'Anna", "Callaway-Sant'Anna"),
+                .fns = ~abs( (.x - delta0) / se ) > z))
 
 # Power
-power_res <- reject_rates %>% 
+# TWFE
+twfe_power <- reject_rates %>% 
+  filter(str_detect(name, "TWFE")) %>% 
   group_by(delta, name) %>% 
-  summarise(power = mean(reject))
+  summarise(power = mean(TWFE)) %>% 
+  ungroup()
+
+# TWFE drops
+twfe_drops_power <- reject_rates %>% 
+  filter(str_detect(name, "TWFE"), str_detect(name, "(drops)")) %>% 
+  group_by(delta, name) %>% 
+  summarise(power = mean(`TWFE (drops)`)) %>% 
+  ungroup()
+
+# R-S
+rs_power <- reject_rates %>% 
+  filter(str_detect(name, "Roth")) %>% 
+  group_by(delta, name) %>% 
+  summarise(power = mean(`Roth-Sant'Anna`)) %>% 
+  ungroup()
+
+# C-S
+cs_power <- reject_rates %>% 
+  filter(str_detect(name, "Callaway")) %>% 
+  group_by(delta, name) %>% 
+  summarise(power = mean(`Callaway-Sant'Anna`)) %>% 
+  ungroup()
+
+# Power combined
+power_res <- rbind(twfe_power, twfe_drops_power, rs_power, cs_power)
+
 
 # Graph
 ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
@@ -105,17 +144,15 @@ ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
   geom_smooth(aes(colour = name), 
               se = FALSE, span = 0.75) +
   theme_minimal() +
-  labs(title = "Power Curve for TWFE", 
+  labs(title = "Power Curves", 
        x = expression(delta), 
        y = "Power",
-       caption = str_wrap("Points represent frequency with which a two-tailed 5% t-test rejects the false H0: delta = 0. Smoothed line generated using LOESS."), 
-       90)  +
+       caption = str_wrap("Points represent frequency with which a two-tailed 5% t-test rejects the false H0: delta = 0. Smoothed line generated using LOESS.", 90))  +
   theme(
     plot.title = element_text(hjust = 0.5), 
     plot.caption = element_text(hjust = 0),
     legend.position = "bottom",
-    legend.title = element_blank(),
-    legend.direction = "horizontal"
+    legend.title = element_blank()
   ) +
   ylim(-0.05, 1.05) +
   geom_hline(yintercept = 0) +
@@ -127,9 +164,10 @@ ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
              colour = "steelblue") +
   annotate(
     "text",
-    x = mean(power_res$delta),       
+    x = -0.015,       
     y = conf_lev + 0.05,            
-    label = bquote(alpha == .(conf_lev)),
+    label = paste0("alpha == ", conf_lev),
+    parse = TRUE,
     colour = "firebrick",
     hjust = 1,                        
     size = 3.5
@@ -142,4 +180,11 @@ ggplot(data = power_res, aes(x = delta, y = power, colour = name)) +
     colour = "steelblue",
     hjust = 1,
     size = 3.5
+  ) +
+  guides(
+    colour = guide_legend(
+      nrow = 2,
+      ncol = 3,
+      byrow = TRUE
+    )
   )
