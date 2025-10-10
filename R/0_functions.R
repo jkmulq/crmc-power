@@ -254,50 +254,6 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
   return(store)
 }
 
-
-# sim_params: data.frame with columns j (agency), Nj (size), pj_pre, tj
-generate_panel_data <- function(sim_params, t, delta, balanced = TRUE, attrition_sd = 0) {
-  # sim_params: data.frame with columns j, Nj, pj_pre, tj
-  sim_dt <- as.data.table(sim_params)
-  J <- nrow(sim_dt)
-  
-  # Create individuals for each agency
-  # Step 1: create rows (agency, id)
-  indiv_dt <- sim_dt[, .(id = seq_len(Nj)), by = .(j, Nj, pj_pre, tj)]
-  
-  # Step 2: expand to all periods
-  panel <- indiv_dt[, .(period = seq_len(t)), by = .(j, id, Nj, pj_pre, tj)]
-  setnames(panel, "j", "agency")
-  
-  # treated indicator (unit is treated from period >= tj)
-  panel[, treated := as.integer(period >= tj)]
-  
-  # probability for this row (bounded to [0,1])
-  panel[, p := pmin(pmax(pj_pre + delta * treated, 0), 1)]
-  
-  # simulate outcomes (vectorised)
-  panel[, y := rbinom(.N, size = 1, prob = p)]
-  
-  # unique unit id across agencies
-  panel[, uid := paste0(agency, "_", id)]
-  
-  # if you want to allow attrition (unbalanced panel), remove random draws:
-  if (!balanced) {
-    # attrition_sd: fraction sd of Nj to remove each period (simple example)
-    set.seed(NULL)
-    panel <- panel[, {
-      n_keep <- max(1, round(Nj + rnorm(1, mean = 0, sd = attrition_sd * Nj)))
-      keep_ids <- sample(seq_len(Nj), size = min(n_keep, Nj))
-      .SD[id %in% keep_ids]
-    }, by = .(agency, period)]
-  }
-  
-  # return data.frame for downstream packages
-  return(as.data.frame(panel))
-}
-
-
-
 generate_rs_data_fast <- function(agency_data, delta) {
   
   # infer J and t
