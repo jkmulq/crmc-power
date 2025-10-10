@@ -82,6 +82,56 @@ generate_data <- function(agency_data, delta){
   
 }
 
+
+generate_agency_data <- function(J, t, Njmin, Njmax, delta){
+
+  # Average number of probationers over time for each agency
+  Nj <- extraDistr::rdunif(n = J,
+                           min = Njmin, # Minimum number
+                           max = Njmax) # Maximum number
+  
+  # True recidivism rate across agencies
+  pj <- runif(n = J, 
+              min = 0.2, # Minimum rate. Must be >= min treatment effect
+              max = 0.5) # Maximum rate. 1 - this > max treatment
+  
+  # 0.2 Simulation parameter summary
+  sim_params <- data.frame("j" = 1:J,
+                           "Nj" = Nj,
+                           "pj_pre" = pj)
+  
+  # 0.2 Setup storage matrix for data
+  agency_data <- tibble(agency = rep(0, J * t))
+  agency_data$agency <- sort(rep(1:J, t)) # Setup agency index
+  agency_data$period <- rep(1:t, J) # Setup time index
+  
+  # Join on simulation params
+  agency_data <- left_join(agency_data, sim_params, by = join_by("agency" == "j"))
+  
+  # Create time-varying agency size
+  agency_data$Njt <- agency_data$Nj + extraDistr::rdunif(n = J * t, min = -15, max = 15)
+  
+  # Treatment period for each agency
+  # tj <- sample(13:t, size = J, replace = FALSE)
+  tj <- gtools::permute(13:t)[1:J]
+  
+  # Join treatment dates onto agency_data
+  tj_key <- data.frame(agency = 1:J, tj = tj)
+  agency_data <- left_join(agency_data, tj_key, by = "agency")
+  
+  # Create treatment period dummy
+  agency_data <- agency_data %>% 
+    mutate(treated = ifelse(period - tj >= 0, 1, 0))
+  
+  # Create post treatment recidivism probability
+  agency_data <- agency_data %>% 
+    mutate(pj_post = ifelse(treated == 1, pj_pre + delta, pj_pre))
+  
+  # Return data frame
+  return(agency_data)
+  
+}
+
 generate_data_fast <- function(agency_data, delta) {
   
   # infer J and t
@@ -160,14 +210,6 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
     data <- data %>% 
       mutate(uid = paste(id, tj, sep = "_"))
     
-    # Roth-Sant'Anna
-    twfe_rs <- staggered::staggered(df = data,
-                                          i = "uid", # Cross-sectional unit identifier
-                                          t = "period", # Time period column
-                                          g = "tj", # First period observation is treated,
-                                          y = "y", # Outcome variable
-                                          estimand = "simple")
-    
     # Callaway-Sant'Anna
     twfe_cs <- staggered::staggered_cs(df = data,
                                       i = "uid", # Cross-sectional unit identifier
@@ -183,23 +225,111 @@ run_sim_for_rho <- function(rho, M, agency_data, n_cores) {
              twfe_reg_drops$coefficients[1],
              twfe_cl_drops,
              twfe_rb_drops,
-             twfe_rs[1:2],
              twfe_cs[1:2])
     
     # Return
     return(out)
     
-  }, mc.cores = n_cores)
+  }, mc.cores = n_cores, mc.set.seed = TRUE)
   
   store <- do.call(rbind, store)
   colnames(store) <- NULL # Remove column names
-  store <- cbind(rep(rho, M), store) # Append the treatment effect
+  store <- cbind(rep(rho, M), store) # Append the true treatment effect
   store <- as.data.frame(store) %>% 
     setNames(c("delta", 
                "twfe_est", "twfe_cl_se", "twfe_hc1_se", 
                "twfe_drops_est", "twfe_drops_cl_se", "twfe_drops_hc1_se", 
-               "rs_est", "rs_se",
                "cs_est", "cs_se"))
   
   return(store)
 }
+
+
+# sim_params: data.frame with columns j (agency), Nj (size), pj_pre, tj
+generate_panel_data <- function(sim_params, t, delta, balanced = TRUE, attrition_sd = 0) {
+  # sim_params: data.frame with columns j, Nj, pj_pre, tj
+  sim_dt <- as.data.table(sim_params)
+  J <- nrow(sim_dt)
+  
+  # Create individuals for each agency
+  # Step 1: create rows (agency, id)
+  indiv_dt <- sim_dt[, .(id = seq_len(Nj)), by = .(j, Nj, pj_pre, tj)]
+  
+  # Step 2: expand to all periods
+  panel <- indiv_dt[, .(period = seq_len(t)), by = .(j, id, Nj, pj_pre, tj)]
+  setnames(panel, "j", "agency")
+  
+  # treated indicator (unit is treated from period >= tj)
+  panel[, treated := as.integer(period >= tj)]
+  
+  # probability for this row (bounded to [0,1])
+  panel[, p := pmin(pmax(pj_pre + delta * treated, 0), 1)]
+  
+  # simulate outcomes (vectorised)
+  panel[, y := rbinom(.N, size = 1, prob = p)]
+  
+  # unique unit id across agencies
+  panel[, uid := paste0(agency, "_", id)]
+  
+  # if you want to allow attrition (unbalanced panel), remove random draws:
+  if (!balanced) {
+    # attrition_sd: fraction sd of Nj to remove each period (simple example)
+    set.seed(NULL)
+    panel <- panel[, {
+      n_keep <- max(1, round(Nj + rnorm(1, mean = 0, sd = attrition_sd * Nj)))
+      keep_ids <- sample(seq_len(Nj), size = min(n_keep, Nj))
+      .SD[id %in% keep_ids]
+    }, by = .(agency, period)]
+  }
+  
+  # return data.frame for downstream packages
+  return(as.data.frame(panel))
+}
+
+
+
+generate_rs_data_fast <- function(agency_data, delta) {
+  
+  # infer J and t
+  J <- max(agency_data$agency)
+  t <- max(agency_data$period)
+  
+  # preallocate a list for results
+  data_list <- vector("list", length = nrow(agency_data))
+  
+  # simulate all outcomes at once using vectorized rbern
+  # (one row = one agency-period cell)
+  for (i in seq_len(nrow(agency_data))) {
+    df <- agency_data[i, ]
+    y_untreat <- rnorm(df$Njt, mean = 0, sd = 1)
+    y_treated <- rnorm(df$Njt, mean = 0 + delta, sd = 1)
+    # y_untreat <- rbern(df$Njt, df$pj_pre)
+    # y_treated <- rbern(df$Njt, df$pj_pre + delta)
+    
+    data_list[[i]] <- data.frame(
+      y_untreat = y_untreat,
+      y_treated = y_treated,
+      id = seq_len(df$Njt),
+      agency = df$agency,
+      period = df$period
+    )
+  }
+  
+  # bind results
+  data <- data.table::rbindlist(data_list, use.names = TRUE)
+  
+  # join parameters using a key merge (faster than left join)
+  agency_data_dt <- data.table::as.data.table(agency_data)
+  data <- merge(data, agency_data_dt, by = c("agency", "period"), all.x = TRUE)
+  
+  # create treatment probability column
+  data$pj_post <- data$pj_pre + delta
+  
+  # checks (can be disabled for production)
+  stopifnot(all(data$treated.x == data$treated.y))
+  stopifnot(all(data$Njt == ave(data$agency, data$agency, data$period, FUN = length)))
+  
+  # Return data
+  data[]
+}
+
