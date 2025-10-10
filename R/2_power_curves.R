@@ -168,10 +168,10 @@ write.csv(results_df, paste0(results_loc,
 
 ggsave(paste0(graphs_loc,
                "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").png"),
-        p)
+        p, height = 7, width = 6)
 ggsave(paste0(graphs_loc,
               "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").svg"),
-       p)
+       p, height = 7, width = 6)
 ggsave(paste0(graphs_loc,
               "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").pdf"),
-       p)
+       p, height = 7, width = 6)
