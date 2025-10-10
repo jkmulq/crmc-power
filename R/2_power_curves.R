@@ -21,44 +21,10 @@ set.seed(1235901350)
 # 0.1 simulation parameters
 J <- 30 # No. agencies
 t <- 12 * 4 # No. years
-rho_vec <- seq(-0.025, 0, 0.002) # Treatment effect sizes
-M <- 500 # Simulation reps
-
-# Average number of probationers over time for each agency
-Njmin <- 20
-Njmax <- 500
-Nj <- extraDistr::rdunif(n = J,
-                         min = Njmin, # Minimum number
-                         max = Njmax) # Maximum number
-
-# True recidivism rate across agencies
-pj <- runif(n = J, 
-            min = 0.2, # Minimum rate. Must be >= min treatment effect
-            max = 0.5) # Maximum rate. 1 - this > max treatment
-
-# Treatment period for each agency (add 12 to account for first year)
-tj <- sample(1:J, size = J, replace = FALSE) + 12
-
-# 0.2 Simulation parameter summary
-sim_params <- data.frame("j" = 1:J,
-                         "Nj" = Nj,
-                         "pj_pre" = pj,
-                         "tj" = tj)
-
-# 0.3 Setup storage matrix for data
-agency_data <- tibble(agency = rep(0, J * t))
-agency_data$agency <- sort(rep(1:J, t)) # Setup agency index
-agency_data$period <- rep(1:t, J) # Setup time index
-
-# Join on simulation params
-agency_data <- left_join(agency_data, sim_params, by = join_by("agency" == "j"))
-
-# Create treatment period dummy
-agency_data <- agency_data %>% 
-  mutate(treated = ifelse(period - tj >= 0, 1, 0))
-
-# Create time-varying agency size
-agency_data$Njt <- agency_data$Nj + extraDistr::rdunif(n = J * t, min = -15, max = 15)
+rho_vec <- seq(-0.025, 0, 0.0025) # Treatment effect sizes
+M <- 100 # Simulation reps
+Njmin <- 20 # Min average number of probationers in an agency
+Njmax <- 200 # Min average number of probationers in an agency
 
 # Detect available cores
 n_cores <- parallel::detectCores() - 1
@@ -70,7 +36,16 @@ results <- vector("list", length = length(rho_vec))
 # Loop across rho values (serial outer loop, parallel inner loop)
 for (e in seq_along(rho_vec)) {
   
+  # Select treatment effect
   rho <- rho_vec[e]
+  
+  # Generate agency data
+  agency_data <- generate_agency_data(J = J, t = t, 
+                                      Njmin = Njmin, Njmax = Njmax,
+                                      delta = rho)
+  
+  # Make data
+  data <- generate_data_fast(agency_data, delta = rho)
   
   cat("Running rho =", rho, "(", e, "/", length(rho_vec), ")\n")
   
@@ -79,20 +54,17 @@ for (e in seq_along(rho_vec)) {
   
 }
 
-
 ## Reshape data to nice format
 results_df <- do.call(rbind, results) %>% 
   as.data.frame() %>% 
   setNames(c("delta", 
              "TWFE", "TWFE Clustered SE", "TWFE Robust SE", 
              "TWFE (drops)", "TWFE (drops) Clustered SE", "TWFE (drops) Robust SE",
-             "Roth-Sant'Anna", "Roth-Sant'Anna SE",
              "Callaway-Sant'Anna", "Callaway-Sant'Anna SE")) %>% 
   pivot_longer(., cols = c("TWFE Clustered SE", 
                             "TWFE Robust SE", 
                             "TWFE (drops) Clustered SE",
                             "TWFE (drops) Robust SE",
-                            "Roth-Sant'Anna SE", 
                             "Callaway-Sant'Anna SE"), 
                values_to = "se") %>% 
   mutate(across(.cols = -name, .fns = as.numeric))
@@ -104,7 +76,7 @@ z <- qnorm(1 - conf_lev / 2)
 
 # Rejection rate calculations
 reject_rates <- results_df %>% 
-  mutate(across(.cols = c("TWFE", "TWFE (drops)", "Roth-Sant'Anna", "Callaway-Sant'Anna"),
+  mutate(across(.cols = c("TWFE", "TWFE (drops)", "Callaway-Sant'Anna"),
                 .fns = ~abs( (.x - delta0) / se ) > z))
 
 # Power
@@ -122,13 +94,6 @@ twfe_drops_power <- reject_rates %>%
   summarise(power = mean(`TWFE (drops)`)) %>% 
   ungroup()
 
-# R-S
-rs_power <- reject_rates %>% 
-  filter(str_detect(name, "Roth")) %>% 
-  group_by(delta, name) %>% 
-  summarise(power = mean(`Roth-Sant'Anna`)) %>% 
-  ungroup()
-
 # C-S
 cs_power <- reject_rates %>% 
   filter(str_detect(name, "Callaway")) %>% 
@@ -137,7 +102,7 @@ cs_power <- reject_rates %>%
   ungroup()
 
 # Power combined
-power_res <- rbind(twfe_power, twfe_drops_power, rs_power, cs_power)
+power_res <- rbind(twfe_power, twfe_drops_power, cs_power)
 
 
 # Graph
@@ -191,6 +156,8 @@ p <- ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
     )
   )
 
+# Print graph
+p
 
 ## Save results and graph
 results_loc <- "/Users/jmulqueeney/Documents/Dev/crmc-power/results"
