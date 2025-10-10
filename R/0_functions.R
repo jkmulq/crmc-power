@@ -134,23 +134,29 @@ generate_agency_data <- function(J, t, Njmin, Njmax, delta){
 
 generate_data_fast <- function(agency_data, delta) {
   
-  # infer J and t
+  # Infer J and T parameters
   J <- max(agency_data$agency)
   t <- max(agency_data$period)
   
-  # update post-treatment probabilities once
+  # Calculate post-treatment probabilities
   agency_data$pj_post <- ifelse(agency_data$treated == 1, 
                                 agency_data$pj_pre + delta, 
                                 agency_data$pj_pre)
   
-  # preallocate a list for results
+  # List to store simulated data
   data_list <- vector("list", length = nrow(agency_data))
   
-  # simulate all outcomes at once using vectorized rbern
-  # (one row = one agency-period cell)
+  # Simulate outcomes
+  # (one row = one agency-period pair)
   for (i in seq_len(nrow(agency_data))) {
+    
+    # Select data (representing agency-period pair)
     df <- agency_data[i, ]
+    
+    # Simulate Bernoulli outcome using pj_post (which is dynamic)
     y <- rbern(df$Njt, df$pj_post)
+    
+    # Append data frame to list
     data_list[[i]] <- data.frame(
       y = y,
       id = seq_len(df$Njt),
@@ -158,17 +164,21 @@ generate_data_fast <- function(agency_data, delta) {
       period = df$period,
       treated = df$treated
     )
+    
   }
   
-  # bind results
+  # Bind results
   data <- data.table::rbindlist(data_list, use.names = TRUE)
   
-  # join parameters using a key merge (faster than left join)
+  # Join parameters using a key merge (faster than left join)
   agency_data_dt <- data.table::as.data.table(agency_data)
   data <- merge(data, agency_data_dt, by = c("agency", "period"), all.x = TRUE)
   
-  # checks (can be disabled for production)
+  # Checks
+  # Whether treatment timings agree across data frames
   stopifnot(all(data$treated.x == data$treated.y))
+  
+  # Whether simulated number of probationers equals rows in agency-period groups
   stopifnot(all(data$Njt == ave(data$agency, data$agency, data$period, FUN = length)))
   
   # Return data
