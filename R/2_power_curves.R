@@ -21,7 +21,7 @@ set.seed(1235901350)
 # 0.1 simulation parameters
 J <- 30 # No. agencies
 t <- 12 * 4 # No. years
-rho_vec <- seq(-0.025, 0, 0.00125) # Treatment effect sizes
+rho_vec <- seq(-0.05, 0, 0.00125) # Treatment effect sizes
 M <- 500 # Simulation reps
 Njmin <- 20 # Min average number of probationers in an agency
 Njmax <- 200 # Min average number of probationers in an agency
@@ -104,12 +104,15 @@ cs_power <- reject_rates %>%
 # Power combined
 power_res <- rbind(twfe_power, twfe_drops_power, cs_power)
 
+# Remove SE from legend
+power_res <- power_res %>% 
+  mutate(name = gsub(" SE", "", name))
 
 # Graph
 p <- ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
   geom_point() + 
   geom_smooth(aes(colour = name), 
-              se = FALSE, span = 0.75) +
+              se = FALSE, span = 0.4) +
   theme_minimal() +
   labs(title = "Power Curves", 
        x = expression("|" * delta * "|"), 
@@ -131,7 +134,7 @@ p <- ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
              colour = "steelblue") +
   annotate(
     "text",
-    x = 0.015,       
+    x = 0.03,       
     y = conf_lev + 0.05,            
     label = paste0("alpha == ", conf_lev),
     parse = TRUE,
@@ -141,7 +144,7 @@ p <- ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
   ) +
   annotate(
     "text",
-    x = 0.005,       
+    x = 0.0475,       
     y = 0.8 - 0.075,                  
     label = "80% power",
     colour = "steelblue",
@@ -156,22 +159,19 @@ p <- ggplot(data = power_res, aes(x = abs(delta), y = power, colour = name)) +
     )
   )
 
-# Print graph
-p
-
 ## Save results and graph
 results_loc <- "/Users/jmulqueeney/Documents/Dev/crmc-power/results"
 graphs_loc <- "/Users/jmulqueeney/Documents/Dev/crmc-power/graphs"
 
 write.csv(results_df, paste0(results_loc, 
-                             "/power results (M", M, "J", J, "T", t, "Njmax", 500, ").csv"))
+                             "/power results (M", M, "J", J, "T", t, "Njmax", 500, ")_full.csv"))
 
 ggsave(paste0(graphs_loc,
-               "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").png"),
+               "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ")_full.png"),
         p, height = 7, width = 6)
 ggsave(paste0(graphs_loc,
-              "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").svg"),
+              "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ")_full.svg"),
        p, height = 7, width = 6)
 ggsave(paste0(graphs_loc,
-              "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ").pdf"),
+              "/power curves (M", M, "J", J, "T", t, "Njmax", Njmax, ")_full.pdf"),
        p, height = 7, width = 6)
