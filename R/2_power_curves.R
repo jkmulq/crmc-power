@@ -21,8 +21,8 @@ set.seed(1235901350)
 # 0.1 simulation parameters
 J <- 30 # No. agencies
 t <- 12 * 4 # No. years
-rho_vec <- seq(-0.025, 0, 0.0025) # Treatment effect sizes
-M <- 100 # Simulation reps
+rho_vec <- seq(-0.025, 0, 0.00125) # Treatment effect sizes
+M <- 500 # Simulation reps
 Njmin <- 20 # Min average number of probationers in an agency
 Njmax <- 200 # Min average number of probationers in an agency
 
